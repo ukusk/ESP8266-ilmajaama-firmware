@@ -250,8 +250,8 @@ Risk on selle seadme puhul väike (tasuta API võti, ainult ilmaandmed), kuid se
 |---|---|
 | 2026-10-21 | Projekti algus. Teema valik, GitHubi repositooriumi loomine, dokumentatsiooni esialgne struktuur |
 | 2026-10-22 | Dokumentatsiooni kohandamine HU-061 komplektile: komponendid, viigud, ühendusskeem, nõuded |
-| [2026-10-28] | [täida: mida selles tunnis tehti] |
-| 2026-11-04 | Programmaatori tuvastamine (CH340, COM3) ja Arduino IDE seadistamine (esp8266 3.1.2). Esimene püsivara üleslaadimine ESP-01S-ile (LED-i vilgutamise test), OLED-ekraani test HU-061 plaadil. Dokumentatsiooni ülevaatus ja parandused |
+| [2026-10-28] | Vahenädal |
+| 2026-11-04 | Programmaatori tuvastamine (CH340, COM3) ja Arduino IDE seadistamine (esp8266 3.1.2). Esimene püsivara üleslaadimine ESP-01S-ile (olemasolev testkood + hotspot), OLED-ekraani test HU-061 plaadil. Ühe uue ilmajaama komplekti kokkujootmine (Tanel). Dokumentatsiooni ülevaatus ja parandused (Uku). |
 
 ## Koodinäide
 
