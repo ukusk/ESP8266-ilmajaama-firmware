@@ -1,158 +1,189 @@
-# ESP8266 ilmajaam – projektidokumentatsioon
+# Ilmajaam ESP-01S mikrokontrolleril (HU-061 komplekt)
 
-2026-10-21
+**Autorid:** Tanel Metshein, Uku Siim Kurm
+**Juhendaja:** Tanel Toova
+**Projekti algus:** 2026-10-21 · **Viimati uuendatud:** 2026-11-04 · **Tunnipäevik:** [vt allpool](#tunnipäevik)
+
+Püsivara HU-061 ilmakella jootmiskomplektile (ESP-01S + 0,96" OLED). Seade toob OpenWeatherMapist valitud linna ilmaandmed ning kuvab need ekraanil ja veebilehel. WiFi, linna ja API võtme saab seadistada brauseris, ilma püsivara uuesti üles laadimata.
+
+<img src="docs/img/seade.jpg" alt="Kokkupandud ilmajaam" width="400">
+
+## Sisukord
+
+- [Kiirstart](#kiirstart)
+- [Projekti eesmärk](#projekti-eesmärk)
+- [Komponendid](#komponendid)
+- [Kontroller ja viigud](#kontroller-ja-viigud)
+- [Sisendid ja väljundid](#sisendid-ja-väljundid)
+- [Toide, side ja andmete hoidmine](#toide-side-ja-andmete-hoidmine)
+- [Nõuded](#nõuded)
+- [Ühendusskeem](#ühendusskeem)
+- [Turvalisus](#turvalisus)
+- [Veaotsing](#veaotsing)
+- [Teadaolevad piirangud](#teadaolevad-piirangud)
+- [Dokumentatsioon ja andmelehed](#dokumentatsioon-ja-andmelehed)
+- [Tunnipäevik](#tunnipäevik)
+- [Koodinäide](#koodinäide)
+
+## Kiirstart
+
+### 1. Arduino IDE ettevalmistus (ühekordne)
+
+1. **File → Preferences → Additional boards manager URLs:**
+   `http://arduino.esp8266.com/stable/package_esp8266com_index.json`
+2. **Boards Manager:** paigalda *esp8266 by ESP8266 Community* (testitud versiooniga 3.1.2).
+3. **Library Manager:** paigalda
+   - *ArduinoJson* (Benoit Blanchon, v6 või v7)
+   - *NTPClient* (Fabrice Weinberg)
+   - *ESP8266 and ESP32 OLED driver for SSD1306 displays* (ThingPulse, v4.x)
+4. **Tools:**
+
+   | Seade | Väärtus |
+   |---|---|
+   | Board | Generic ESP8266 Module |
+   | Flash Size | 1MB (FS:64KB OTA:~470KB) — failisüsteem peab olema valitud |
+   | Upload Speed | 115200 |
+
+### 2. Püsivara üleslaadimine
+
+ESP-01S-il pole USB-pesa, seega laaditakse püsivara ESP-01 USB-programmaatoriga (CH340, lüliti UART/PROG).
+
+1. Võta ESP-01S HU-061 plaadilt ära ja pane programmaatorisse nii, et moodul jääb programmaatori kohale.
+2. Lülita lüliti asendisse **PROG** ja ühenda programmaator USB-sse. Lüliti asendit loetakse ainult käivitusel, seega pärast lülitamist ühenda programmaator uuesti.
+3. Ava sketš, vali õige COM-port ja vajuta **Upload**. Üleslaadimine õnnestus, kui väljundis on `Hash of data verified` ja viimasena `Hard resetting via RTS pin...` (sellele rohkem ridu ei järgne).
+4. Pane ESP-01S tagasi HU-061 plaadile samas suunas ja ühenda plaat USB-toitega.
+
+> Üleslaadimine kustutab komplekti tehase püsivara. Varukoopia saad enne teha käsuga
+> `esptool.py --port COM3 read_flash 0 0x100000 varu.bin`.
+
+### 3. Esmane seadistamine
+
+1. Tasuta API võtme saad [openweathermap.org](https://home.openweathermap.org/api_keys) kontolt. Uus võti hakkab tööle mõne tunni jooksul.
+2. Seadistuste puudumisel avab seade WiFi-võrgu **`ESP_AP`**. Võrgu nimi, parool ja aadress on ekraanil.
+3. Ühendu sellega telefonist. Seadistusleht avaneb ise või aadressil `http://192.168.4.1`.
+4. Sisesta WiFi nimi ja parool, linn (nt `Tartu,EE`) ja API võti, seejärel **Salvesta**.
+5. Seade taaskäivitub ja ühendub võrku. Edaspidi on veebiliides aadressil `http://ilmajaam.local` või ekraanil näidatud IP-aadressil.
+
+Seadistuste kustutamiseks hoia nuppu **KEY1** 5 sekundit all.
 
 ## Projekti eesmärk
 
-Projekti eesmärk on ehitada ESP8266 mikrokontrolleril põhinev ilmajaam, mis toob OpenWeatherMap API kaudu valitud linna ilmaandmed ja mille seadistusi (WiFi, linn, API võti) saab muuta veebibrauseris ilma programmi uuesti üles laadimata.
+Ehitada ESP8266-põhine ilmajaam, mis:
 
-Seade peab pärast voolukatkestust ise WiFi-ga ühenduma, salvestatud seadistused laadima ja ilmaandmete uuendamist jätkama.
+- toob OpenWeatherMap API-st valitud linna ilmaandmed;
+- võimaldab WiFi, linna ja API võtme muutmist brauseris, ilma püsivara uuesti üles laadimata;
+- taastab pärast voolukatkestust ise WiFi-ühenduse, laadib salvestatud seadistused ja jätkab tööd.
 
-## Seadme lühikirjeldus
+Seadmel pole andureid, kõik ilmaandmed tulevad internetist.
 
-Ilmajaam on ehitatud ESP-01S ja 0,96" OLED-iga ilmakella jootmiskomplektist (plaat HU-061): väike trükkplaat, millel on ESP-01S WiFi-moodul, 0,96" OLED-ekraan, seadistusnupp ja USB-toide. Andureid pole, ilmaandmed tulevad internetist. Komplekti tehase püsivara (QWeather) asendatakse selle projekti püsivaraga.
+## Komponendid
 
-- Seade ühendub salvestatud WiFi-võrku. Kui see ei õnnestu või seadistusi pole, avab ta oma võrgu `ESP_AP` ja veebilehe aadressil 192.168.4.1. Võrgu nimi, parool ja aadress on näha ekraanil.
-- Veebilehel sisestatakse WiFi nimi ja parool, linn ning OpenWeatherMapi API võti. Need salvestatakse LittleFS-i faili `/config.json`.
-- Seade pärib ilmaandmed valitud intervalliga (vaikimisi 10 minutit) ja kuvab temperatuuri, õhuniiskuse, õhurõhu, tuule kiiruse ja ilmakirjelduse OLED-ekraanil ja veebilehel.
-- Kellaaeg sünkroonitakse NTP-serveriga. Ekraanil ja avalehel on näha kellaaeg, WiFi olek ja API päringute olek.
-- Seadistusnupu KEY1 hoidmine 5 s kustutab seadistused.
+### HU-061 komplekt
 
-## Komponentide loetelu
+Komplekti ametlik nimi on *HU-061 天气预报时钟制作套件 (时区)*, ehk ilmaennustuskella valmistamise komplekt ajavööndi toega (*Weather forecast clock production kit*). Pakendi partii on `B19-35-A-03` / `FADB0005-001`, pakitud 2024-03-29. Trükkplaadi märgistus on `wheather clock HU-061 V1.0_230923`. Komponentide nimetused ja tähised on [tootja juhendi](http://myosuploads3.banggood.com/products/20240423/20240423034843HU-061WeatherClock.pdf) järgi.
 
-Komplekti HU-061 sisu (tootja juhendi järgi):
+| Pilt ja mudel | Tähis | Komponent | Kogus | Otstarve |
+|---|---|---|---|---|
+| <img src="docs/img/plaat.jpg" width="140"><br><sub>HU-061 V1.0_230923</sub> | – | Trükkplaat | 1 | Kõik ühendused, väliseid juhtmeid pole |
+| <img src="docs/img/esp-01s.jpg" width="140"><br><sub>Ai-Thinker ESP-01S (ESP8266EX)</sub> | P1 | WiFi-moodul, 1 MB välkmälu, 2×4 kontaktiga | 1 | Kontroller, WiFi, veebiserver |
+| <img src="docs/img/oled.jpg" width="140"><br><sub>O96B4-small, SSD1306</sub> | JP1 | 0,96" OLED-moodul, 128×64, I²C (aadress 0x3C), kontaktid GND-VCC-SCL-SDA, koos 1×4 isasliistuga | 1 | Ilmaandmete ja oleku kuvamine |
+| <img src="docs/img/ams1117.jpg" width="140"><br><sub>AMS1117-3.3 (märgistus H321SK)</sub> | U1 | Lineaarne pingeregulaator, SOT-223, kuni 1 A | 1 | 5 V → 3,3 V |
+| <img src="docs/img/kondensaatorid.jpg" width="140"><br><sub>10 µF</sub> | C1, C2 | Elektrolüütkondensaator, läbiv montaaž | 2 | Toite silumine regulaatori sisendis ja väljundis. Pikk jalg on pluss |
+| <img src="docs/img/key1.jpg" width="140"><br><sub>Horizontal button (卧式按键)</sub> | KEY1 | Horisontaalne külgnupp pika nupuvarrega, läbiv montaaž | 1 | Seadistuste kustutamine |
+| <img src="docs/img/micro-usb.jpg" width="140"><br><sub>USB interface (USB 接口), micro-USB</sub> | P2 | Micro-USB pesa ainult toitekontaktidega (VBUS, GND) | 1 | 5 V toide |
+| <img src="docs/img/emaspesa-1.jpg" width="140"><br><sub>Bent foot single row 4P socket (弯脚单排4P母座)</sub> | JP1 | Üherealine 4-kontaktiline nurgaga emaspesa, samm 2,54 mm | 1 | OLED-i püstine ühendamine |
+| <img src="docs/img/emaspesa-2.jpg" width="140"><br><sub>Double row 4P socket (双排4P母座)</sub> | P1 | Kaherealine 2×4 emaspesa, samm 2,54 mm | 1 | ESP-01S eemaldatav ühendamine |
+| <img src="docs/img/korpus.jpg" width="140"><br><sub>Akrüülpaneelid (kaitsekilega)</sub> | – | Laserlõigatud akrüülkorpus, 2 plaati detailidega | 1 kmpl | Korpus |
+| <img src="docs/img/kinnitusvahendid.jpg" width="140"><br><sub>M2 kruvid, mutrid, distantspostid</sub> | – | Messingist distantspostid (pikad ja lühikesed), kruvid ja mutrid | 1 kmpl | Korpuse ja plaadi kokkupanek |
+| <img src="docs/img/usb-kaabel.jpg" width="140"><br><sub>USB-A toitekaabel</sub> | – | Toitekaabel | 1 | Toide arvutist või USB-adapterist |
 
-| Nr | Komponent | Tähis plaadil | Kogus | Otstarve |
-| --- | --- | --- | --- | --- |
-| 1 | Elektrolüütkondensaator 10 µF (läbiv montaaž) | C1, C2 | 2 | Toite silumine regulaatori sisendis ja väljundis. Pikk jalg on pluss |
-| 2 | 0,96" OLED-ekraanimoodul (SSD1306, 128×64, I²C) | JP1 | 1 | Ilmaandmete ja oleku kuvamine |
-| 3 | Külgnupp (horisontaalne) | KEY1 | 1 | Seadistuste kustutamine |
-| 4 | WiFi-moodul ESP-01S (ESP8266, 1 MB välkmälu) | P1 | 1 | Kontroller, WiFi, veebiserver |
-| 5 | USB-pesa (pindmontaaž) | P2 | 1 | 5 V toite sisend |
-| 6 | Pingeregulaator AMS1117-3.3 | U1 | 1 | 5 V → 3,3 V |
-| 7 | USB-toitekaabel | – | 1 | Toide |
-| 8 | Akrüülkorpus | – | 1 | |
-| 9 | Kruvikott (M2 kruvid, mutrid, vasest distantspostid) | – | 1 | Korpuse kokkupanek |
-| 10 | Trükkplaat HU-061 | – | 1 | |
-| 11 | Juhend | – | 1 | |
+Skeemil on ka `BAT1`, kuid komplektis seda pole ja seade töötab ainult USB-toitel. Komplektis on ka paberjuhend ja QR-koodiga silt tootja ajavööndi seadistamise õpetusele.
 
-Jootmisjuhendi järgi on komplektis ka 4-kontaktiline üherealine emaspesa (OLED-i jaoks), 2×4 emaspesa (ESP-01S jaoks) ja OLED-i 4-kontaktiline liist, kuigi tabelis neid pole.
+### Lisaks vaja
 
-Komplektist väljaspool on vaja:
+| Pilt ja mudel | Komponent | Otstarve |
+|---|---|---|
+| <img src="docs/img/programmaator.jpg" width="140"><br><sub>USB to ESP-01 Adapter, WCH CH340C</sub> | ESP-01 USB-programmaator: USB-A pistik, 2×4 pesa, lüliti UART/PROG | Püsivara üleslaadimine. Windowsis tuvastatakse kui *USB-SERIAL CH340* (VID 1A86, PID 7523) |
+| – | 5 V USB-toiteadapter, vähemalt 0,5 A | Püsitoide |
+| – | 2,4 GHz WiFi-võrk internetiühendusega | Side OpenWeatherMapi ja NTP-ga |
 
-| Nr | Komponent | Otstarve |
-| --- | --- | --- |
-| 1 | ESP-01 USB-programmaator (CH340, programmeerimislülitiga) või 3,3 V USB-UART-adapter | Püsivara üleslaadimine ESP-01S-ile |
-| 2 | USB-toiteadapter 5 V, vähemalt 0,5 A | Püsitoide |
-| 3 | 2,4 GHz WiFi-ruuter internetiühendusega | Side OpenWeatherMapi ja NTP-ga |
-| 4 | Telefon või arvuti brauseriga | Veebiliides |
+## Kontroller ja viigud
 
-## Kontroller
-
-Kontrollerina töötab ESP8266EX ESP-01S moodulil, mis ühendab protsessori, WiFi-raadio ja välkmälu.
-
-| Omadus | Väärtus |
-| --- | --- |
-| Protsessor | Tensilica L106, 32 bit, 80 MHz (kuni 160 MHz) |
-| Mälu | umbes 80 KB RAM, 1 MB välkmälu (programm + LittleFS) |
-| Side | WiFi 802.11 b/g/n, ainult 2,4 GHz |
-| Loogikatase | 3,3 V (viigud ei talu 5 V) |
-| Programmeerimine | Arduino C++, välise USB-UART-adapteriga (115200 baud) |
-| Failisüsteem | LittleFS, Flash Size valik `1MB (FS:64KB OTA:~470KB)` |
-
-Kasutatud viigud (HU-061 skeemi järgi):
+ESP8266EX ESP-01S moodulil: Tensilica L106 (80 MHz), ~80 KB RAM, 1 MB välkmälu (programm + LittleFS), WiFi 802.11 b/g/n ainult 2,4 GHz. Viigud on 3,3 V loogikaga ega talu 5 V.
 
 | ESP-01S viik | GPIO | Funktsioon |
-| --- | --- | --- |
-| IO0 | GPIO0 | OLED SDA (I²C andmed) |
-| IO2 | GPIO2 | OLED SCL (I²C takt). Mooduli sinine LED on samal viigul, seega olekunäiduks seda kasutada ei saa |
-| RXD | GPIO3 | Nupp KEY1 GND-sse, sisend sisemise pull-up-ga. Seetõttu töötab Serial ainult saatmiseks |
-| TXD | GPIO1 | Silumisväljund (näha ainult USB-UART-adapteriga) |
+|---|---|---|
+| IO0 | 0 | OLED SDA |
+| IO2 | 2 | OLED SCL. Mooduli sinine LED on samal viigul, seega seda olekunäiduks ei kasutata |
+| RXD | 3 | Nupp KEY1 (GND-sse, sisemine pull-up). Seetõttu töötab Serial ainult saatmiseks |
+| TXD | 1 | Silumislogi (115200 baud, ainult USB-UART-adapteriga) |
 
-GPIO0 ja GPIO2 peavad käivitusel olema kõrgel tasemel. Seda tagavad OLED-mooduli I²C pull-up-takistid, nii et ekraan peab käivitamisel ühendatud olema.
+GPIO0 ja GPIO2 peavad käivitusel olema kõrgel tasemel. Seda tagavad OLED-mooduli pull-up-takistid, seega peab ekraan käivitamisel ühendatud olema.
 
-## Sisendid
+## Sisendid ja väljundid
 
-Seadmel on üks füüsiline sisend, kõik ülejäänud on andmeside kaudu.
+| Liik | Nimi | Kirjeldus |
+|---|---|---|
+| Sisend | Nupp KEY1 | 5 s hoidmine kustutab seadistused ja taaskäivitab seadme |
+| Sisend | Veebivorm `/config` → `/save` | WiFi nimi ja parool, linn, API võti, uuendusintervall (2–1440 min), ajavöönd, suveaeg |
+| Sisend | OpenWeatherMap (HTTPS) | Temperatuur, niiskus, rõhk, tuul, kirjeldus |
+| Sisend | NTP (`pool.ntp.org`) | Kellaaeg |
+| Väljund | OLED | 10 s ilmavaade (linn, kell, temperatuur, kirjeldus, niiskus, rõhk, tuul), 5 s olekuvaade (WiFi, IP, API). AP-režiimis seadistusjuhis |
+| Väljund | Avaleht `/` | Ilmaandmed, olek, viimase uuenduse aeg. Uueneb iga 30 s |
+| Väljund | `/api/status` | Kõik andmed JSON-ina (nt koduautomaatika jaoks) |
+| Väljund | Serial (TX) | Ühenduse, seadistuse ja API päringute logi |
 
-| Sisend | Allikas | Mida seade sellega teeb |
-| --- | --- | --- |
-| Nupp KEY1 (GPIO3) | Kasutaja | 5 s hoidmine kustutab seadistused ja taaskäivitab seadme |
-| Veebivorm `/save` | Kasutaja brauserist | WiFi nimi ja parool, linn, API võti, intervall, ajavöönd |
-| OpenWeatherMapi JSON-vastus | Internet (HTTPS) | Temperatuur, niiskus, rõhk, tuul, kirjeldus |
-| NTP-vastus | Internet (UDP, `pool.ntp.org`) | Täpne kellaaeg |
-| Fail `/config.json` | LittleFS | Salvestatud seadistused käivitusel |
+## Toide, side ja andmete hoidmine
 
-## Väljundid
-
-| Väljund | Sihtkoht | Sisu |
-| --- | --- | --- |
-| OLED-ekraan | Kasutaja | 10 s ilmavaade (linn, kellaaeg, temperatuur, kirjeldus, niiskus, rõhk, tuul), seejärel 5 s olekuvaade (WiFi, IP, API olek). AP-režiimis võrgu nimi, parool ja aadress |
-| Avaleht `/` | Brauser | Ilmaandmed, WiFi ja API olek, kellaaeg, viimase uuenduse aeg |
-| Seadistusleht `/config` | Brauser | Seadistuste vaatamine ja muutmine |
-| JSON `/api/status` | Brauser või koduautomaatika | Kõik andmed ja olekud masinloetavalt |
-| Serial Monitor (TX) | Arvuti USB-UART-adapteri kaudu, 115200 baud | Ühenduse, seadistuse ja API päringute logi |
-| Fail `/config.json` | LittleFS | Salvestatud seadistused |
-| WiFi-pääsupunkt `ESP_AP` | Telefon või arvuti | Esmane seadistamine, kui põhivõrku pole |
-
-## Muu: toide, side, andmete hoidmine ja tarkvara
-
-**Toide.** Plaat saab 5 V USB-pesa P2 kaudu, regulaator AMS1117-3.3 (U1) teeb sellest 3,3 V ESP-01S-ile ja OLED-ile, C1 ja C2 siluvad toidet. Voolutarve on WiFi saatmise ajal ligikaudu 70–200 mA ja OLED-il kuni umbes 20 mA, nii et 0,5 A adapter on piisav (ligikaudsed väärtused).
+**Toide.** 5 V micro-USB pesast P2, AMS1117-3.3 annab 3,3 V ESP-01S-ile ja OLED-ile. Voolutarve on ligikaudu 70–200 mA WiFi saatmisel ja kuni ~20 mA OLED-il, seega piisab 0,5 A adapterist.
 
 **Side.**
 
-- WiFi 2,4 GHz kliendina (STA) põhivõrku, AP-režiimis pääsupunktina `ESP_AP` (WPA2, vaikeparool `ilmajaam123`, muudetav konstandiga `AP_PASS`).
-- HTTPS päring `api.openweathermap.org` (port 443). Serveri sertifikaati ei kontrollita (`setInsecure()`), sest ESP8266 mälu on piiratud.
-- NTP (UDP 123) aadressile `pool.ntp.org`, ajavöönd ja EL-i suveaeg arvestatakse programmis.
-- mDNS nimi `ilmajaam.local` ja captive portal AP-režiimis.
+- WiFi kliendina (STA) põhivõrku. Ühenduse puudumisel pääsupunkt `ESP_AP` (WPA2) ja captive portal aadressil 192.168.4.1.
+- HTTPS päringud `api.openweathermap.org` (port 443), vt [Turvalisus](#turvalisus).
+- NTP (UDP 123), ajavöönd ja EL-i suveaeg arvestatakse programmis.
+- mDNS nimi `ilmajaam.local`.
 
-**Andmete hoidmine.** Seadistused on failis `/config.json` (JSON, LittleFS). Salvestamine käib ajutise faili kaudu, et voolukatkestus ei rikuks vana faili. Veebiliides ei näita salvestatud parooli ega API võtit.
+**Andmete hoidmine.** Seadistused on LittleFS-i failis `/config.json`. Kirjutamine käib ajutise faili kaudu, nii et voolukatkestus salvestamise ajal ei riku olemasolevat faili. Veebiliides ei näita salvestatud parooli ega API võtit.
 
-**Tarkvara.**
+**Konfigureeritavad konstandid** (koodi alguses):
 
-| Teek | Otstarve |
-| --- | --- |
-| ESP8266WiFi, ESP8266WebServer, ESP8266HTTPClient, ESP8266mDNS, DNSServer, LittleFS | ESP8266 core 3.x kaasas |
-| ArduinoJson (v6 või v7) | JSON-i lugemine ja kirjutamine |
-| NTPClient (Fabrice Weinberg) | Kellaaja sünkroonimine |
-| ESP8266 and ESP32 OLED driver for SSD1306 displays (ThingPulse, v4.x) | OLED-ekraan |
+| Konstant | Vaikeväärtus | Tähendus |
+|---|---|---|
+| `AP_SSID` / `AP_PASS` | `ESP_AP` / vt koodi | Seadistusvõrgu nimi ja parool. Muuda parool enne kasutuselevõttu |
+| `ADMIN_PASS` | tühi | Kui määratud, nõuavad seadistuslehed parooli (kasutaja `admin`) |
+| `HOST_NAME` | `ilmajaam` | mDNS nimi |
+| `OLED_FLIP` | `true` | Muuda `false`-ks, kui tekst on tagurpidi |
 
-Arendusvahend on Arduino IDE, plaat `Generic ESP8266 Module`, Flash Size `1MB (FS:64KB OTA:~470KB)`.
+## Nõuded
 
-**Püsivara üleslaadimine.** ESP-01S-il pole USB-pesa. Moodul võetakse plaadilt ära ja pannakse ESP-01 USB-programmaatorisse, mille lüliti on asendis PROG (GPIO0 on GND-s). Pärast üleslaadimist pannakse moodul tagasi plaadile. Üleslaadimine kustutab tehase püsivara. Kui seda soovitakse alles hoida, tuleb enne teha varukoopia (`esptool.py read_flash 0 0x100000 varu.bin`).
+**Funktsionaalsed**
 
-**OpenWeatherMapi võti.** Tasuta võtme saab openweathermap.org kontolt. Päringute limiit on tasuta kontol umbes 60 minutis ja 1000 päevas, programmi minimaalne intervall 2 minutit jääb sellest kaugele alla.
-
-## Nõuded loodavale seadmele
-
-**Funktsionaalsed nõuded**
-
-| Nr | Nõue | Kuidas täidetud |
-| --- | --- | --- |
-| F1 | Seade ühendub automaatselt salvestatud WiFi-võrku | `connectSTA()` käivitusel, `staWatchdogTick()` katkestuse korral |
-| F2 | Ühenduse ebaõnnestumisel või seadistuse puudumisel käivitub AP `ESP_AP` | `startAP()` |
-| F3 | AP-režiimis pääseb seadme veebiliidesesse | Veebiserver ja captive portal aadressil 192.168.4.1 |
-| F4 | WiFi nime ja parooli, linna ning API võtme sisestamine veebis | Leht `/config`, töötleja `handleSave()` |
-| F5 | Seadistused salvestatakse LittleFS-i ja säilivad taaskäivitusel | `saveConfig()`, `loadConfig()` |
-| F6 | Kuvatakse temperatuur, niiskus, rõhk, tuule kiirus ja kirjeldus | `fetchWeather()`, `oledTick()`, `handleRoot()` |
-| F7 | Ilmaandmeid uuendatakse automaatselt kindla intervalliga | `weatherTick()`, intervall seadistatav (2–1440 min) |
-| F8 | API vigade korral seade ei jookse kokku | Kõik veatee harud püütakse kinni, uus katse 60 s pärast |
+| Nr | Nõue | Lahendus |
+|---|---|---|
+| F1 | Automaatne ühendumine salvestatud WiFi-võrku | `connectSTA()`, katkestuse korral `staWatchdogTick()` |
+| F2 | Ühenduse või seadistuse puudumisel käivitub AP `ESP_AP` | `startAP()` |
+| F3 | AP-režiimis on veebiliides kättesaadav | Veebiserver ja captive portal, 192.168.4.1 |
+| F4 | WiFi, linna ja API võtme sisestamine veebis | `/config`, `handleSave()` |
+| F5 | Seadistused säilivad taaskäivitusel | `saveConfig()`, `loadConfig()` |
+| F6 | Kuvatakse temperatuur, niiskus, rõhk, tuul ja kirjeldus | `fetchWeather()`, `oledTick()`, `handleRoot()` |
+| F7 | Ilmaandmed uuenevad automaatselt | `weatherTick()`, intervall 2–1440 min |
+| F8 | API vead ei jooksuta seadet kokku | Kõik veaharud käsitletud, uus katse 60 s pärast |
 | F9 | Kellaaeg sünkroonitakse NTP-ga | `ntpTick()` |
-| F10 | Kuvatakse viimase eduka uuenduse aeg | `lastOkEpoch`, avaleht |
-| F11 | Kuvatakse WiFi ja API päringute olek | OLED-i olekuvaade, avaleht ja `/api/status` |
-| F12 | Pärast voolukatkestust taastub töö ilma kasutaja sekkumiseta | AP-režiimis `apRetryTick()` proovib põhivõrku iga 2 min tagant |
+| F10 | Kuvatakse viimase eduka uuenduse aeg | `lastOkEpoch` |
+| F11 | Kuvatakse WiFi ja API olek | OLED, avaleht, `/api/status` |
+| F12 | Töö taastub pärast voolukatkestust iseseisvalt | `apRetryTick()` proovib AP-režiimis põhivõrku iga 2 min |
 
-**Mittefunktsionaalsed nõuded**
+**Mittefunktsionaalsed**
 
-- Turvalisus: parool ja API võti on veebiliideses peidetud, AP-võrk on WPA2-parooliga, valikuline `ADMIN_PASS` kaitseb seadistuslehti.
-- Töökindlus: seadistusfail kirjutatakse ajutise faili kaudu, enne API päringut kontrollitakse vaba mälu (vähemalt 14 KB).
-- Kasutusmugavus: SSID valitakse leitud võrkude loendist, seade on leitav nimega `ilmajaam.local`, ekraan näitab IP-aadressi ja olekut ning nupp KEY1 kustutab seadistused.
-- Hooldatavus: kood on kommenteeritud, seadistused ja ajad on konstantidena faili alguses.
-- Piirang: HTTPS-i serveri sertifikaati ei kontrollita.
+- **Turvalisus:** parool ja API võti on veebis peidetud, AP on WPA2-ga, valikuline `ADMIN_PASS`. Piirangud vt [Turvalisus](#turvalisus).
+- **Töökindlus:** atomaarne seadistuse salvestus, enne API päringut kontrollitakse vaba mälu (≥ 14 KB).
+- **Kasutatavus:** SSID valik leitud võrkude loendist, `ilmajaam.local`, IP ja olek ekraanil, nupuga lähtestamine.
+- **Hooldatavus:** kommenteeritud kood, seaded konstantidena faili alguses.
 
 ## Ühendusskeem
 
-Kõik ühendused on HU-061 trükkplaadil, väliseid juhtmeid pole vaja. Skeem on tootja juhendist:
+Kõik ühendused on HU-061 trükkplaadil, väliseid juhtmeid pole vaja (skeem tootja juhendist):
 
 ```text
  P2 USB                U1 AMS1117-3.3
@@ -170,879 +201,108 @@ Kõik ühendused on HU-061 trükkplaadil, väliseid juhtmeid pole vaja. Skeem on
                                              GND
 ```
 
-`BAT1` on skeemil, aga komplekti loetelus pole. Seade töötab USB-toitel ja aku pesa jääb tühjaks.
+## Turvalisus
 
-Andmeside käib WiFi kaudu. Tavarežiimis ühendub seade ruuteri kaudu internetti (OpenWeatherMap, NTP) ja brauser jõuab seadmeni sama ruuteri kaudu. AP-režiimis (`ESP_AP`) ühendub brauser otse seadmega, ilma ruuterita.
+| Risk | Mõju | Lahendus |
+|---|---|---|
+| OpenWeatherMapi serveri sertifikaati ei kontrollita (`setInsecure()`) | Ründaja, kes on seadme ja interneti vahel (sama WiFi, võltspääsupunkt, ruuter, DNS), võib esineda OpenWeatherMapina, lugeda API võtit ja saata valeandmeid | Kontrollida sertifikaati juur-CA järgi (`setTrustAnchors()` + `setX509Time()` NTP ajaga) |
+| Veebiliides töötab HTTP-ga, mitte HTTPS-iga | Sama võrgu kasutaja võib salvestamisel näha WiFi parooli ja API võtit | Seadistada ainult usaldusväärses võrgus või AP-režiimis |
+| `ADMIN_PASS` on vaikimisi tühi | Iga kohtvõrgu kasutaja saab seadistusi muuta või kustutada | Määrata `ADMIN_PASS` |
+| AP vaikeparool on koodis ja ekraanil | Läheduses olev isik saab seadistusvõrku ühenduda, kui seade on AP-režiimis | Muuta `AP_PASS` enne kasutuselevõttu |
 
-## Juhtkood
+Risk on selle seadme puhul väike (tasuta API võti, ainult ilmaandmed), kuid sertifikaadi kontroll on kerge lisada ja on parem praktika.
 
-Programm on ühes failis `weather_station.ino` (Arduino IDE-s peab kaust kandma sama nime). Vajalikud teegid on kirjeldatud lõigus „Muu“.
+## Veaotsing
+
+| Sümptom | Põhjus ja lahendus |
+|---|---|
+| `Failed to connect to ESP8266: Timed out` | Moodul ei käivitunud programmeerimisrežiimis. Lüliti PROG-asendisse ja programmaator uuesti USB-sse |
+| Arduino IDE-s pole plaati *Generic ESP8266 Module* | ESP8266 pakett on paigaldamata, vt [Kiirstart](#kiirstart) |
+| Ekraan jääb tühjaks | Moodul on plaadil vales suunas või OLED pole korralikult joodetud |
+| Tekst on tagurpidi | `OLED_FLIP = false` |
+| „Vigane API võti (401)” | Võti on vale või veel aktiveerimata (kuni mõni tund pärast loomist) |
+| „Linna ei leitud (404)” | Lisa riigikood, nt `Tartu,EE` |
+| „Salvestamine ebaõnnestus” | Flash Size valikus puudub failisüsteem. Vali `1MB (FS:64KB OTA:~470KB)` |
+| Seade ei leia WiFi-võrku | ESP8266 toetab ainult 2,4 GHz võrke |
+
+## Teadaolevad piirangud
+
+- OpenWeatherMap ei toeta eesti keelt (`lang=et`), seega on ilmakirjeldus inglise keeles.
+- Linna järgi päring (`q=`) on OpenWeatherMapis märgitud aegunuks, kuid töötab. Tulevikukindlam on Geocoding API ja koordinaadid.
+- Tasuta plaani limiit on 60 päringut minutis ja 1 000 000 kuus. Minimaalne 2-minutiline intervall jääb sellest kaugele alla.
+
+## Dokumentatsioon ja andmelehed
+
+| Komponent | Tootja | Dokument |
+|---|---|---|
+| HU-061 komplekt | Tootja nime ei avaldata | [Tootja juhend (PDF, komponendid ja jootmine)](http://myosuploads3.banggood.com/products/20240423/20240423034843HU-061WeatherClock.pdf) · [Ajavööndi muutmise õpetus tehase püsivarale (QR-kood, WeChat)](https://mp.weixin.qq.com/s/EPzJDI3mexVzFEDmF4cRRg) |
+| ESP8266EX | Espressif | [ESP8266EX Datasheet](https://espressif.com/sites/default/files/documentation/0a-esp8266ex_datasheet_en.pdf) |
+| ESP-01S | Ai-Thinker | [ESP-01S andmeleht](https://assets.ebee.com/datasheet/2409231126_Ai-Thinker-ESP-01S_C503582.pdf) |
+| SSD1306 | Solomon Systech | [SSD1306 andmeleht](https://www.crystalfontz.com/controllers/SSD1306) |
+| AMS1117-3.3 | Advanced Monolithic Systems | [AMS1117 andmeleht](http://www.advanced-monolithic.com/pdf/ds1117.pdf) |
+| CH340 | WCH | [CH340 tooteleht, andmeleht ja draiverid](https://www.wch-ic.com/products/CH340.html) |
+| ESP8266 Arduino core | ESP8266 Community | [Dokumentatsioon](https://arduino-esp8266.readthedocs.io/) |
+| OpenWeatherMap API | OpenWeather | [Current Weather API](https://openweathermap.org/current) |
+
+## Tunnipäevik
+
+| Kuupäev | Töö |
+|---|---|
+| 2026-10-21 | Projekti algus. Teema valik, GitHubi repositooriumi loomine, dokumentatsiooni esialgne struktuur |
+| 2026-10-22 | Dokumentatsiooni kohandamine HU-061 komplektile: komponendid, viigud, ühendusskeem, nõuded |
+| [2026-10-28] | [täida: mida selles tunnis tehti] |
+| 2026-11-04 | Programmaatori tuvastamine (CH340, COM3) ja Arduino IDE seadistamine (esp8266 3.1.2). Esimene püsivara üleslaadimine ESP-01S-ile (LED-i vilgutamise test), OLED-ekraani test HU-061 plaadil. Dokumentatsiooni ülevaatus ja parandused |
+
+## Koodinäide
+
+Täielik lähtekood lisatakse repositooriumi eraldi failidena. Allolev lihtsustatud näide näitab põhiideed: ühendumine WiFi-ga, ilmaandmete pärimine ja kuvamine OLED-ekraanil. Seadistuste veebiliides, AP-režiim ja veakäsitlus on näitest välja jäetud.
 
 ```cpp
-/*
- * ESP8266 WiFi ilmajaam (OpenWeatherMap + LittleFS + veebipõhine seadistus + OLED)
- * Riistvara: ESP-01S ja 0,96" OLED-iga ilmakella jootmiskomplekt (plaat HU-061), nupp KEY1
- * ==========================================================================
- *
- * Vajalikud teegid (Arduino Library Manager):
- *   - ArduinoJson   (Benoit Blanchon, v6.x või v7.x - kood töötab mõlemaga)
- *   - NTPClient     (Fabrice Weinberg, v3.2.x)
- *   - ESP8266 and ESP32 OLED driver for SSD1306 displays (ThingPulse, v4.x)
- * Sisseehitatud (ESP8266 core 3.x): ESP8266WiFi, ESP8266WebServer, ESP8266HTTPClient,
- *   ESP8266mDNS, DNSServer, LittleFS, WiFiUdp, Wire
- *
- * Arduino IDE seaded:
- *   Board:       "Generic ESP8266 Module"
- *   Flash Size:  "1MB (FS:64KB OTA:~470KB)"  <- failisüsteem PEAB olema valitud!
- *   Board package: "esp8266 by ESP8266 Community" 3.0.0 või uuem
- *   Serial Monitor: 115200 baud
- *
- * Töö loogika:
- *   1. Käivitusel loetakse /config.json LittleFS-ist.
- *   2. Kui WiFi seadistus on olemas -> ühendutakse (15 s). Ebaõnnestumisel käivitub AP "ESP_AP".
- *   3. AP-režiimis proovib seade ise iga 2 min tagant põhivõrku tagasi ühenduda
- *      (nt pärast voolukatkestust, kui ruuter käivitub aeglasemalt).
- *   4. Veebiliides: http://<seadme-IP>/  või  http://ilmajaam.local/
- *      AP-režiimis: ühendu WiFi-võrku "ESP_AP" ja ava http://192.168.4.1/
- *   5. Nupu KEY1 (GPIO3/RX) hoidmine 5 s töötamise ajal kustutab seadistused.
- *   6. OLED näitab 10 s ilma ja 5 s olekut (IP, WiFi, API), AP-režiimis seadistusjuhist.
- */
-
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
-#include <ESP8266mDNS.h>
 #include <WiFiClientSecure.h>
-#include <WiFiUdp.h>
-#include <DNSServer.h>
-#include <LittleFS.h>
 #include <ArduinoJson.h>
-#include <NTPClient.h>
-#include <Wire.h>
 #include <SSD1306Wire.h>
 
-// ---------------------------------------------------------------------------
-// Konstandid ja seaded
-// ---------------------------------------------------------------------------
-static const char*    AP_SSID        = "ESP_AP";        // AP-režiimi võrgu nimi
-static const char*    AP_PASS        = "ilmajaam123";   // min 8 märki; "" = avatud võrk
-static const char*    ADMIN_PASS     = "";              // != "" -> seadistuslehed nõuavad parooli (kasutaja: admin)
-static const char*    HOST_NAME      = "ilmajaam";      // http://ilmajaam.local
-static const char*    CONFIG_FILE    = "/config.json";
-static const char*    CONFIG_TMP     = "/config.tmp";
+const char* WIFI_SSID = "minuvõrk";
+const char* WIFI_PASS = "parool";
+const char* API_KEY   = "openweathermap-võti";
 
-static const uint32_t WIFI_TIMEOUT_MS   = 15000;   // esmane ühendumine
-static const uint32_t AP_RETRY_MS       = 120000;  // AP-režiimis STA uuesti proovimine
-static const uint32_t WIFI_LOST_RECONN  = 30000;   // mitu ms katkestust enne uuesti ühendamist
-static const uint32_t WIFI_LOST_AP      = 180000;  // mitu ms katkestust enne AP käivitamist
-static const uint32_t API_RETRY_MS      = 60000;   // vea korral proovi uuesti
-static const uint32_t API_TIMEOUT_MS    = 8000;
-static const uint32_t NTP_TRY_MS        = 15000;   // NTP päringute minimaalne vahe
-static const uint32_t RESET_HOLD_MS     = 5000;    // nupu KEY1 hoidmine
+SSD1306Wire display(0x3C, 0, 2);   // HU-061: SDA = GPIO0, SCL = GPIO2
 
-// HU-061 plaadi viigud. Mooduli sinine LED on GPIO2 peal (OLED SCL), seega LED-i ei kasutata.
-static const uint8_t  BUTTON_PIN        = 3;       // nupp KEY1 (RXD / GPIO3) GND-sse
-static const uint8_t  OLED_SDA          = 0;       // IO0
-static const uint8_t  OLED_SCL          = 2;       // IO2
-static const uint8_t  OLED_ADDR         = 0x3C;
-static const bool     OLED_FLIP         = true;    // kui tekst on ekraanil tagurpidi, muuda false-ks
-
-static const char*    NTP_SERVER     = "pool.ntp.org";
-
-// ---------------------------------------------------------------------------
-// Globaalsed objektid ja muutujad
-// ---------------------------------------------------------------------------
-struct Config {
-  String   ssid;
-  String   pass;
-  String   city        = "Tallinn";
-  String   apiKey;
-  uint16_t intervalMin = 10;     // ilmauuenduse intervall minutites
-  int8_t   tzHours     = 2;      // ajavöönd UTC suhtes (Eesti = 2)
-  bool     dstAuto     = true;   // EL-i suveaja automaatne arvestus
-};
-
-struct Weather {
-  float  temp      = 0;
-  int    humidity  = 0;
-  int    pressure  = 0;
-  float  wind      = 0;
-  String desc;
-  String place;
-  bool   valid     = false;
-};
-
-Config  cfg;
-Weather weather;
-
-ESP8266WebServer server(80);
-DNSServer        dns;
-WiFiUDP          ntpUDP;
-NTPClient        timeClient(ntpUDP, NTP_SERVER, 0, 3600000);  // UTC, uuendus 1 h
-SSD1306Wire      display(OLED_ADDR, OLED_SDA, OLED_SCL);
-
-bool     apMode          = false;
-uint32_t lastStaTry      = 0;
-uint32_t wifiLostSince   = 0;     // 0 = ühendus korras
-uint32_t lastNtpTry      = 0;
-uint32_t lastApiAttempt  = 0;
-bool     apiAttempted    = false;
-bool     lastApiOk       = false;
-String   apiMessage      = "Pole veel päritud";
-int      apiHttpCode     = 0;
-uint32_t apiOkCount      = 0;
-uint32_t apiFailCount    = 0;
-time_t   lastOkEpoch     = 0;     // viimane edukas uuendus (UTC epoch), 0 = teadmata
-uint32_t restartAt       = 0;     // != 0 -> taaskäivita selle aja saabudes
-uint32_t buttonDownSince = 0;
-
-// ---------------------------------------------------------------------------
-// HTML-i stiil (hoitakse flash-mälus)
-// ---------------------------------------------------------------------------
-const char STYLE[] PROGMEM =
-  "<style>"
-  "body{font-family:system-ui,Arial,sans-serif;background:#eef2f6;margin:0;padding:12px;color:#1c2833}"
-  ".w{max-width:520px;margin:auto}"
-  ".c{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px #0002}"
-  "h1{font-size:1.4em;margin:4px 0 12px}h2{font-size:1.05em;margin:0 0 8px;color:#456}"
-  ".t{font-size:2.6em;font-weight:600}"
-  "table{width:100%;border-collapse:collapse}td{padding:4px 0;border-bottom:1px solid #eee}"
-  "td:last-child{text-align:right;font-weight:500}"
-  "label{display:block;margin-top:10px;font-size:.9em;color:#456}"
-  "input[type=text],input[type=password],input[type=number]{width:100%;box-sizing:border-box;padding:9px;border:1px solid #bbb;border-radius:6px;font-size:1em}"
-  "button,.b{display:inline-block;margin-top:14px;padding:10px 16px;border:0;border-radius:6px;background:#2874a6;color:#fff;font-size:1em;text-decoration:none;cursor:pointer}"
-  ".r{background:#c0392b}.ok{color:#1e8449}.er{color:#c0392b}.s{font-size:.8em;color:#789}"
-  "</style>";
-
-// ---------------------------------------------------------------------------
-// Abifunktsioonid
-// ---------------------------------------------------------------------------
-
-// HTML-i erimärkide kaitse (XSS-i vältimiseks väärtuste kuvamisel)
-String htmlEscape(const String &in) {
-  String out;
-  out.reserve(in.length() + 8);
-  for (size_t i = 0; i < in.length(); i++) {
-    char c = in[i];
-    switch (c) {
-      case '&':  out += F("&amp;");  break;
-      case '<':  out += F("&lt;");   break;
-      case '>':  out += F("&gt;");   break;
-      case '"':  out += F("&quot;"); break;
-      case '\'': out += F("&#39;");  break;
-      default:   out += c;
-    }
-  }
-  return out;
-}
-
-// URL-kodeering (linnanimi võib sisaldada täpitähti ja tühikuid)
-String urlEncode(const String &in) {
-  String out;
-  const char *hex = "0123456789ABCDEF";
-  for (size_t i = 0; i < in.length(); i++) {
-    uint8_t c = (uint8_t)in[i];
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += (char)c;
-    else { out += '%'; out += hex[c >> 4]; out += hex[c & 15]; }
-  }
-  return out;
-}
-
-// --- Kuupäevaarvutus (suveaja jaoks, ei sõltu newlib-i timegm-ist) ---
-static int64_t daysFromCivil(int y, int m, int d) {
-  y -= (m <= 2);
-  int era = (y >= 0 ? y : y - 399) / 400;
-  int yoe = y - era * 400;
-  int mp  = (m > 2) ? m - 3 : m + 9;
-  int doy = (153 * mp + 2) / 5 + d - 1;
-  int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return (int64_t)era * 146097 + doe - 719468;
-}
-
-// Kuu viimane pühapäev kell 01:00 UTC (EL-i suveaja piir) -> UTC epoch
-static int64_t lastSundayUtc(int year, int month) {
-  int64_t last = daysFromCivil(year, month, 31);      // märts ja oktoober on 31-päevased
-  int wd = (int)((last + 4) % 7);                     // 0 = pühapäev (1970-01-01 oli neljapäev)
-  return (last - wd) * 86400LL + 3600;
-}
-
-bool isEuDst(time_t utc) {
-  time_t t = utc;
-  struct tm *tmv = gmtime(&t);
-  int year = tmv->tm_year + 1900;
-  int64_t u = (int64_t)utc;
-  return u >= lastSundayUtc(year, 3) && u < lastSundayUtc(year, 10);
-}
-
-// UTC epoch -> kohalik epoch (ajavöönd + valikuline suveaeg)
-time_t toLocal(time_t utc) {
-  long off = (long)cfg.tzHours * 3600L;
-  if (cfg.dstAuto && isEuDst(utc)) off += 3600;
-  return utc + off;
-}
-
-String fmtDateTime(time_t utc) {
-  if (utc == 0) return F("teadmata");
-  time_t l = toLocal(utc);
-  struct tm *t = gmtime(&l);
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
-           t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-  return String(buf);
-}
-
-String fmtTime(time_t utc) {
-  if (utc == 0) return F("--:--");
-  time_t l = toLocal(utc);
-  struct tm *t = gmtime(&l);
-  char buf[6];
-  snprintf(buf, sizeof(buf), "%02d:%02d", t->tm_hour, t->tm_min);
-  return String(buf);
-}
-
-String fmtUptime() {
-  uint32_t s = millis() / 1000;
-  char buf[24];
-  snprintf(buf, sizeof(buf), "%lud %02lu:%02lu:%02lu",
-           (unsigned long)(s / 86400), (unsigned long)((s / 3600) % 24),
-           (unsigned long)((s / 60) % 60), (unsigned long)(s % 60));
-  return String(buf);
-}
-
-bool staConnected() { return WiFi.status() == WL_CONNECTED; }
-
-// ---------------------------------------------------------------------------
-// Seadistuse lugemine ja salvestamine (LittleFS)
-// ---------------------------------------------------------------------------
-bool loadConfig() {
-  if (!LittleFS.exists(CONFIG_FILE)) {
-    Serial.println(F("[CFG] Seadistusfaili ei ole"));
-    return false;
-  }
-  File f = LittleFS.open(CONFIG_FILE, "r");
-  if (!f) {
-    Serial.println(F("[CFG] Faili avamine ebaõnnestus"));
-    return false;
-  }
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-  JsonDocument doc;
-#else
-  DynamicJsonDocument doc(1024);
-#endif
-  DeserializationError err = deserializeJson(doc, f);
-  f.close();
-  if (err) {
-    Serial.print(F("[CFG] JSON viga: "));
-    Serial.println(err.c_str());
-    return false;
-  }
-  cfg.ssid        = doc["ssid"]     | "";
-  cfg.pass        = doc["pass"]     | "";
-  cfg.city        = doc["city"]     | "Tallinn";
-  cfg.apiKey      = doc["apikey"]   | "";
-  cfg.intervalMin = doc["interval"] | 10;
-  cfg.tzHours     = doc["tz"]       | 2;
-  cfg.dstAuto     = doc["dst"]      | true;
-  if (cfg.intervalMin < 2) cfg.intervalMin = 2;
-  Serial.println(F("[CFG] Seadistus loetud"));
-  return true;
-}
-
-// Kirjutame esmalt ajutisse faili ja nimetame ümber -> pooleli jäänud kirjutus ei riku vana faili
-bool saveConfig() {
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-  JsonDocument doc;
-#else
-  DynamicJsonDocument doc(1024);
-#endif
-  doc["ssid"]     = cfg.ssid;
-  doc["pass"]     = cfg.pass;
-  doc["city"]     = cfg.city;
-  doc["apikey"]   = cfg.apiKey;
-  doc["interval"] = cfg.intervalMin;
-  doc["tz"]       = cfg.tzHours;
-  doc["dst"]      = cfg.dstAuto;
-
-  File f = LittleFS.open(CONFIG_TMP, "w");
-  if (!f) {
-    Serial.println(F("[CFG] Ajutise faili loomine ebaõnnestus"));
-    return false;
-  }
-  size_t n = serializeJson(doc, f);
-  f.close();
-  if (n == 0) {
-    LittleFS.remove(CONFIG_TMP);
-    return false;
-  }
-  LittleFS.remove(CONFIG_FILE);
-  if (!LittleFS.rename(CONFIG_TMP, CONFIG_FILE)) {
-    Serial.println(F("[CFG] Ümbernimetamine ebaõnnestus"));
-    return false;
-  }
-  Serial.println(F("[CFG] Seadistus salvestatud"));
-  return true;
-}
-
-// ---------------------------------------------------------------------------
-// WiFi: STA ja AP
-// ---------------------------------------------------------------------------
-bool connectSTA(uint32_t timeoutMs) {
-  if (cfg.ssid.length() == 0) return false;
-  Serial.printf("[WiFi] Ühendun: %s ", cfg.ssid.c_str());
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
-  uint32_t start = millis();
-  while (!staConnected() && millis() - start < timeoutMs) {
-    delay(250);
-    yield();
-    Serial.print('.');
-  }
-  Serial.println();
-  if (staConnected()) {
-    Serial.print(F("[WiFi] Ühendatud, IP: "));
-    Serial.println(WiFi.localIP());
-    return true;
-  }
-  Serial.println(F("[WiFi] Ühendamine ebaõnnestus"));
-  return false;
-}
-
-void startAP() {
-  WiFi.mode(WIFI_AP_STA);   // AP + STA, et saaks taustal põhivõrku uuesti proovida
-  bool ok = (strlen(AP_PASS) >= 8) ? WiFi.softAP(AP_SSID, AP_PASS) : WiFi.softAP(AP_SSID);
-  delay(100);
-  dns.start(53, "*", WiFi.softAPIP());   // captive portal: kõik nimed -> 192.168.4.1
-  apMode = true;
-  lastStaTry = millis();
-  Serial.printf("[AP] %s, SSID=%s, IP=%s\n", ok ? "Käivitatud" : "VIGA", AP_SSID,
-                WiFi.softAPIP().toString().c_str());
-}
-
-void stopAP() {
-  dns.stop();
-  WiFi.softAPdisconnect(true);
-  WiFi.mode(WIFI_STA);
-  apMode = false;
-  Serial.println(F("[AP] Peatatud, töötan STA-režiimis"));
-}
-
-void onWifiConnected() {
-  wifiLostSince = 0;
-  if (MDNS.begin(HOST_NAME)) MDNS.addService("http", "tcp", 80);
-  timeClient.begin();
-  lastNtpTry = 0;
-}
-
-// AP-režiimis: proovi aeg-ajalt salvestatud võrku tagasi ühenduda
-void apRetryTick() {
-  if (cfg.ssid.length() == 0) return;
-  if (millis() - lastStaTry < AP_RETRY_MS) return;
-  lastStaTry = millis();
-  if (WiFi.softAPgetStationNum() > 0) return;   // kasutaja seadistab parajasti - ära sega
-
-  Serial.println(F("[WiFi] AP-režiimis: proovin põhivõrku"));
-  WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
-  uint32_t st = millis();
-  while (!staConnected() && millis() - st < 12000) {
-    delay(250);
-    yield();
-  }
-  if (staConnected()) {
-    stopAP();
-    if (!staConnected()) connectSTA(10000);
-    if (staConnected()) onWifiConnected();
-  } else {
-    WiFi.disconnect();
-  }
-}
-
-// STA-režiimis: jälgi ühenduse katkemist
-void staWatchdogTick() {
-  if (staConnected()) {
-    if (wifiLostSince != 0) {
-      Serial.println(F("[WiFi] Ühendus taastus"));
-      wifiLostSince = 0;
-    }
-    return;
-  }
-  if (wifiLostSince == 0) {
-    wifiLostSince = millis();
-    if (wifiLostSince == 0) wifiLostSince = 1;
-    Serial.println(F("[WiFi] Ühendus katkes"));
-    return;
-  }
-  uint32_t lost = millis() - wifiLostSince;
-  static bool reconnTried = false;
-  if (lost > WIFI_LOST_RECONN && !reconnTried) {
-    reconnTried = true;
-    WiFi.disconnect();
-    WiFi.begin(cfg.ssid.c_str(), cfg.pass.c_str());
-  }
-  if (staConnected()) reconnTried = false;
-  if (lost > WIFI_LOST_AP) {
-    reconnTried = false;
-    startAP();   // seade jääb ligipääsetavaks; apRetryTick jätkab proovimist
-  }
-}
-
-// ---------------------------------------------------------------------------
-// NTP
-// ---------------------------------------------------------------------------
-void ntpTick() {
-  if (!staConnected()) return;
-  if (lastNtpTry != 0 && millis() - lastNtpTry < NTP_TRY_MS) return;
-  lastNtpTry = millis();
-  timeClient.update();   // teeb päringu ainult siis, kui intervall on täis või aeg pole seatud
-}
-
-time_t nowUtc() {
-  return timeClient.isTimeSet() ? (time_t)timeClient.getEpochTime() : 0;
-}
-
-// ---------------------------------------------------------------------------
-// OpenWeatherMap
-// ---------------------------------------------------------------------------
-void fetchWeather() {
-  apiAttempted   = true;
-  lastApiAttempt = millis();
-  lastApiOk      = false;
-
-  if (cfg.apiKey.length() == 0 || cfg.city.length() == 0) {
-    apiMessage = F("API võti või linn puudub");
-    apiHttpCode = 0;
-    return;
-  }
-  if (ESP.getFreeHeap() < 14000) {
-    apiMessage = F("Liiga vähe vaba mälu");
-    apiFailCount++;
-    return;
-  }
-
-  String url = F("https://api.openweathermap.org/data/2.5/weather?q=");
-  url += urlEncode(cfg.city);
-  url += F("&appid=");
-  url += urlEncode(cfg.apiKey);
-  url += F("&units=metric&lang=et");
-
-  // setInsecure(): sertifikaati ei kontrollita (ESP8266 mälu on piiratud).
-  // API võti liigub krüpteeritult, aga serveri ehtsust ei kontrollita.
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setBufferSizes(1024, 512);
-
-  HTTPClient http;
-  http.setTimeout(API_TIMEOUT_MS);
-  if (!http.begin(client, url)) {
-    apiMessage = F("HTTP-ühenduse loomine ebaõnnestus");
-    apiFailCount++;
-    return;
-  }
-
-  int code = http.GET();
-  apiHttpCode = code;
-
-  if (code == HTTP_CODE_OK) {
-    String body = http.getString();
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-    JsonDocument doc;
-#else
-    DynamicJsonDocument doc(2048);
-#endif
-    DeserializationError err = deserializeJson(doc, body);
-    if (err) {
-      apiMessage = String(F("JSON viga: ")) + err.c_str();
-      apiFailCount++;
-    } else if (!doc["main"]["temp"].is<float>()) {
-      apiMessage = F("Vastus ei sisalda ilmaandmeid");
-      apiFailCount++;
-    } else {
-      weather.temp     = doc["main"]["temp"].as<float>();
-      weather.humidity = doc["main"]["humidity"] | 0;
-      weather.pressure = doc["main"]["pressure"] | 0;
-      weather.wind     = doc["wind"]["speed"]    | 0.0f;
-      weather.desc     = String((const char *)(doc["weather"][0]["description"] | ""));
-      weather.place    = String((const char *)(doc["name"] | ""));
-      weather.valid    = true;
-      lastApiOk        = true;
-      apiOkCount++;
-      lastOkEpoch      = nowUtc();
-      apiMessage       = F("OK");
-      Serial.printf("[API] OK: %.1f C, %d%%, %d hPa, %.1f m/s, %s\n",
-                    weather.temp, weather.humidity, weather.pressure, weather.wind,
-                    weather.desc.c_str());
-    }
-  } else if (code > 0) {
-    // OWM annab vea korral JSON-i: {"cod":401,"message":"..."}
-    String body = http.getString();
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-    JsonDocument doc;
-#else
-    DynamicJsonDocument doc(512);
-#endif
-    String msg;
-    if (!deserializeJson(doc, body)) msg = String((const char *)(doc["message"] | ""));
-    if (code == 401)      apiMessage = F("Vigane API võti (401)");
-    else if (code == 404) apiMessage = F("Linna ei leitud (404)");
-    else if (code == 429) apiMessage = F("Päringute limiit ületatud (429)");
-    else                  apiMessage = String(F("HTTP ")) + code + (msg.length() ? " - " + msg : "");
-    apiFailCount++;
-  } else {
-    apiMessage = String(F("Ühenduse viga: ")) + HTTPClient::errorToString(code);
-    apiFailCount++;
-  }
-  http.end();
-  if (!lastApiOk) Serial.println("[API] Viga: " + apiMessage);
-}
-
-void weatherTick() {
-  if (!staConnected()) return;
-  uint32_t interval = lastApiOk ? (uint32_t)cfg.intervalMin * 60000UL : API_RETRY_MS;
-  if (!apiAttempted || millis() - lastApiAttempt >= interval) fetchWeather();
-}
-
-// ---------------------------------------------------------------------------
-// Veebiserver
-// ---------------------------------------------------------------------------
-bool authOk() {
-  if (strlen(ADMIN_PASS) == 0) return true;
-  if (server.authenticate("admin", ADMIN_PASS)) return true;
-  server.requestAuthentication();
-  return false;
-}
-
-void sendHead(const char *title, int refreshSec = 0) {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server.send(200, "text/html; charset=utf-8", "");
-  String h = F("<!DOCTYPE html><html lang='et'><head><meta charset='utf-8'>"
-               "<meta name='viewport' content='width=device-width,initial-scale=1'>");
-  if (refreshSec > 0) { h += F("<meta http-equiv='refresh' content='"); h += refreshSec; h += F("'>"); }
-  h += F("<title>"); h += title; h += F("</title>");
-  server.sendContent(h);
-  server.sendContent_P(STYLE);
-  server.sendContent(F("</head><body><div class='w'>"));
-}
-
-void sendFoot() {
-  server.sendContent(F("</div></body></html>"));
-  server.sendContent("");   // lõpetab chunked-vastuse
-}
-
-String row(const char *k, const String &v) {
-  return String(F("<tr><td>")) + k + F("</td><td>") + v + F("</td></tr>");
-}
-
-// Avaleht: ilm + olek
-void handleRoot() {
-  if (apMode && !staConnected()) {   // esmakordsel seadistamisel otse seadistuslehele
-    server.sendHeader("Location", "/config");
-    server.send(302, "text/plain", "");
-    return;
-  }
-  sendHead("Ilmajaam", 30);
-  String s;
-  s.reserve(1500);
-  s += F("<h1>&#127782; Ilmajaam</h1><div class='c'><h2>");
-  s += htmlEscape(weather.valid && weather.place.length() ? weather.place : cfg.city);
-  s += F("</h2>");
-  if (weather.valid) {
-    s += F("<div class='t'>"); s += String(weather.temp, 1); s += F(" &deg;C</div><div>");
-    s += htmlEscape(weather.desc);
-    s += F("</div><table>");
-    s += row("Õhuniiskus", String(weather.humidity) + " %");
-    s += row("Õhurõhk",    String(weather.pressure) + " hPa");
-    s += row("Tuule kiirus", String(weather.wind, 1) + " m/s");
-    s += row("Viimati uuendatud", fmtDateTime(lastOkEpoch));
-    s += F("</table>");
-  } else {
-    s += F("<p>Ilmaandmeid pole veel saadud.</p>");
-  }
-  s += F("</div><div class='c'><h2>Olek</h2><table>");
-  s += row("WiFi", staConnected()
-      ? String("<span class='ok'>ühendatud</span> (") + htmlEscape(WiFi.SSID()) + ", " + WiFi.RSSI() + " dBm)"
-      : String("<span class='er'>ühendamata</span>"));
-  s += row("IP", staConnected() ? WiFi.localIP().toString() : String("-"));
-  if (apMode) s += row("AP-režiim", String("aktiivne (") + AP_SSID + ")");
-  s += row("API olek", lastApiOk ? String("<span class='ok'>OK</span>")
-                                 : String("<span class='er'>") + htmlEscape(apiMessage) + "</span>");
-  s += row("API päringud", String(apiOkCount) + " õnnestus / " + apiFailCount + " ebaõnnestus");
-  s += row("Kellaaeg", fmtDateTime(nowUtc()));
-  s += row("Töötanud", fmtUptime());
-  s += row("Vaba mälu", String(ESP.getFreeHeap()) + " B");
-  s += F("</table></div><a class='b' href='/config'>Seadistused</a>");
-  s += F("<p class='s'>Leht uueneb automaatselt iga 30 s.</p>");
-  server.sendContent(s);
-  sendFoot();
-}
-
-// Seadistuste vorm
-void handleConfig() {
-  if (!authOk()) return;
-  sendHead("Seadistused");
-  String s;
-  s.reserve(2500);
-  s += F("<h1>&#9881; Seadistused</h1><form class='c' method='POST' action='/save'>");
-
-  // Ümbritsevad WiFi-võrgud (sünkroonne skaneerimine ~2 s)
-  s += F("<label>WiFi võrgu nimi (SSID)</label><input type='text' name='ssid' list='nets' maxlength='32' value='");
-  s += htmlEscape(cfg.ssid);
-  s += F("'><datalist id='nets'>");
-  int n = WiFi.scanNetworks();
-  for (int i = 0; i < n && i < 15; i++) {
-    s += F("<option value='"); s += htmlEscape(WiFi.SSID(i)); s += F("'>");
-  }
-  WiFi.scanDelete();
-  s += F("</datalist>");
-
-  s += F("<label>WiFi parool</label><input type='password' name='pass' maxlength='63' placeholder='");
-  s += cfg.pass.length() ? F("(jäta tühjaks, et säilitada praegune)") : F("(avatud võrgu korral tühi)");
-  s += F("'>");
-
-  s += F("<label>Linn (nt Tallinn või Tartu,EE)</label><input type='text' name='city' maxlength='60' value='");
-  s += htmlEscape(cfg.city);
-  s += F("'>");
-
-  s += F("<label>OpenWeatherMap API võti</label><input type='password' name='apikey' maxlength='64' placeholder='");
-  s += cfg.apiKey.length() ? F("(jäta tühjaks, et säilitada praegune)") : F("32-märgiline võti");
-  s += F("'>");
-
-  s += F("<label>Uuendusintervall (minutit, 2-1440)</label><input type='number' name='interval' min='2' max='1440' value='");
-  s += cfg.intervalMin;
-  s += F("'>");
-
-  s += F("<label>Ajavöönd (tunde UTC-st, Eesti = 2)</label><input type='number' name='tz' min='-12' max='14' value='");
-  s += cfg.tzHours;
-  s += F("'>");
-
-  s += F("<label><input type='checkbox' name='dst' value='1'");
-  if (cfg.dstAuto) s += F(" checked");
-  s += F("> Arvesta automaatselt suveaega (EL)</label>");
-
-  s += F("<button type='submit'>Salvesta ja taaskäivita</button></form>");
-  s += F("<form class='c' method='POST' action='/reset' onsubmit=\"return confirm('Kustutada kõik seadistused?')\">"
-         "<h2>Tehaseseaded</h2><button class='r' type='submit'>Kustuta seadistused</button></form>"
-         "<a class='b' href='/'>&larr; Tagasi</a>");
-  server.sendContent(s);
-  sendFoot();
-}
-
-// Seadistuste salvestamine
-void handleSave() {
-  if (!authOk()) return;
-  Config n = cfg;   // töötame koopiaga, kuni kõik on valideeritud
-
-  String ssid = server.arg("ssid"); ssid.trim();
-  String pass = server.arg("pass");
-  String city = server.arg("city"); city.trim();
-  String key  = server.arg("apikey"); key.trim();
-
-  if (ssid.length() == 0 || ssid.length() > 32 || pass.length() > 63 ||
-      city.length() == 0 || city.length() > 60) {
-    server.send(400, "text/plain; charset=utf-8", "Vigased andmed: kontrolli SSID-d ja linna.");
-    return;
-  }
-  if (ssid != cfg.ssid) n.pass = pass;       // uus võrk -> parool tuleb vormilt (võib olla tühi)
-  else if (pass.length() > 0) n.pass = pass; // sama võrk -> tühi väli säilitab vana parooli
-  n.ssid = ssid;
-  n.city = city;
-  if (key.length() > 0) n.apiKey = key;
-
-  long iv = server.arg("interval").toInt();
-  long tz = server.arg("tz").toInt();
-  n.intervalMin = (uint16_t)constrain(iv, 2L, 1440L);
-  n.tzHours     = (int8_t)constrain(tz, -12L, 14L);
-  n.dstAuto     = server.hasArg("dst");
-
-  cfg = n;
-  bool ok = saveConfig();
-
-  sendHead(ok ? "Salvestatud" : "Viga");
-  if (ok) {
-    server.sendContent(F("<div class='c'><h1>&#10004; Salvestatud</h1>"
-                         "<p>Seade taaskäivitub ja ühendub võrku. Kui ühendus õnnestub, "
-                         "leiad lehe aadressilt <b>http://ilmajaam.local</b> "
-                         "või IP-aadressilt, mis kuvatakse seadme ekraanil.</p></div>"));
-    restartAt = millis() + 1500;
-  } else {
-    server.sendContent(F("<div class='c'><h1 class='er'>Salvestamine ebaõnnestus</h1>"
-                         "<p>LittleFS-i kirjutamine ei õnnestunud. Kontrolli, et Flash Size valikus "
-                         "on failisüsteem (nt 1MB FS:64KB).</p></div><a class='b' href='/config'>Tagasi</a>"));
-  }
-  sendFoot();
-}
-
-void handleReset() {
-  if (!authOk()) return;
-  LittleFS.remove(CONFIG_FILE);
-  sendHead("Lähtestatud");
-  server.sendContent(F("<div class='c'><h1>Seadistused kustutatud</h1>"
-                       "<p>Seade taaskäivitub ja avab võrgu <b>ESP_AP</b>.</p></div>"));
-  sendFoot();
-  restartAt = millis() + 1500;
-}
-
-// JSON-olek (nt koduautomaatika jaoks)
-void handleApiStatus() {
-#if ARDUINOJSON_VERSION_MAJOR >= 7
-  JsonDocument doc;
-#else
-  DynamicJsonDocument doc(1024);
-#endif
-  doc["wifi_connected"] = staConnected();
-  doc["ap_mode"]        = apMode;
-  doc["rssi"]           = staConnected() ? WiFi.RSSI() : 0;
-  doc["api_ok"]         = lastApiOk;
-  doc["api_message"]    = apiMessage;
-  doc["api_http_code"]  = apiHttpCode;
-  doc["api_ok_count"]   = apiOkCount;
-  doc["api_fail_count"] = apiFailCount;
-  doc["last_update"]    = fmtDateTime(lastOkEpoch);
-  doc["temp"]           = weather.temp;
-  doc["humidity"]       = weather.humidity;
-  doc["pressure"]       = weather.pressure;
-  doc["wind"]           = weather.wind;
-  doc["description"]    = weather.desc;
-  doc["city"]           = weather.place;
-  doc["valid"]          = weather.valid;
-  String out;
-  serializeJson(doc, out);
-  server.send(200, "application/json; charset=utf-8", out);
-}
-
-void handleNotFound() {
-  if (apMode) {   // captive portal: suuna kõik päringud seadistuslehele
-    server.sendHeader("Location", "http://192.168.4.1/config");
-    server.send(302, "text/plain", "");
-  } else {
-    server.send(404, "text/plain; charset=utf-8", "Lehte ei leitud");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Nupp KEY1 (GPIO3): 5 s hoidmine kustutab seadistused
-// ---------------------------------------------------------------------------
-void buttonTick() {
-  if (digitalRead(BUTTON_PIN) == LOW) {
-    if (buttonDownSince == 0) buttonDownSince = millis();
-    else if (millis() - buttonDownSince > RESET_HOLD_MS) {
-      Serial.println(F("[BTN] Seadistused kustutatud"));
-      LittleFS.remove(CONFIG_FILE);
-      delay(200);
-      ESP.restart();
-    }
-  } else {
-    buttonDownSince = 0;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// OLED-ekraan (128x64), joonistatakse uuesti kord sekundis
-//   AP-režiim      - võrgu nimi, parool ja aadress seadistamiseks
-//   muidu 10 s     - linn, kellaaeg, temperatuur, kirjeldus, niiskus/rõhk/tuul
-//   muidu 5 s      - WiFi, IP, API olek
-// ---------------------------------------------------------------------------
-void oledTick() {
-  static uint32_t lastDraw = 0;
-  if (lastDraw != 0 && millis() - lastDraw < 1000) return;
-  lastDraw = millis();
-
-  display.clear();
-  display.setFont(ArialMT_Plain_10);
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-
-  if (apMode && !staConnected()) {
-    display.drawString(0, 0,  F("Seadistamine"));
-    display.drawString(0, 16, String(F("WiFi: ")) + AP_SSID);
-    display.drawString(0, 28, String(F("Parool: ")) + AP_PASS);
-    display.drawString(0, 40, String(F("http://")) + WiFi.softAPIP().toString());
-  } else if ((millis() / 5000) % 3 == 2) {
-    display.drawString(0, 0,  F("Olek"));
-    display.drawString(0, 16, staConnected() ? String(F("WiFi: ")) + WiFi.SSID() : String(F("WiFi: ühendamata")));
-    display.drawString(0, 28, String(F("IP: ")) + (staConnected() ? WiFi.localIP().toString() : String("-")));
-    display.drawString(0, 40, String(F("API: ")) + apiMessage);
-  } else {
-    display.drawString(0, 0, weather.valid && weather.place.length() ? weather.place : cfg.city);
-    display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128, 0, fmtTime(nowUtc()));
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    if (weather.valid) {
-      display.setFont(ArialMT_Plain_24);
-      display.drawString(0, 12, String(weather.temp, 1) + " °C");
-      display.setFont(ArialMT_Plain_10);
-      display.drawString(0, 38, weather.desc);
-      display.drawString(0, 52, String(weather.humidity) + "%  " + weather.pressure + " hPa  " +
-                                String(weather.wind, 1) + " m/s");
-    } else {
-      display.drawString(0, 24, F("Ilmaandmeid pole veel"));
-    }
-  }
-  display.display();
-}
-
-// ---------------------------------------------------------------------------
-// setup() ja loop()
-// ---------------------------------------------------------------------------
 void setup() {
-  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);   // RX-viik (GPIO3) on nupu jaoks
-  delay(200);
-  Serial.println();
-  Serial.println(F("=== ESP8266 ilmajaam ==="));
-
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
   display.init();
-  if (OLED_FLIP) display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 0, F("Ilmajaam käivitub..."));
+  display.flipScreenVertically();
+  display.drawString(0, 0, "Ühendun...");
   display.display();
-  WiFi.persistent(false);          // ära kulutada flash-mälu WiFi seadistuse kirjutamisega
-  WiFi.setAutoReconnect(true);
-  WiFi.hostname(HOST_NAME);
 
-  // LittleFS: kui esmakordsel käivitusel pole failisüsteemi, vormindatakse see
-  if (!LittleFS.begin()) {
-    Serial.println(F("[FS] Monteerimine ebaõnnestus, vormindan..."));
-    LittleFS.format();
-    if (!LittleFS.begin()) Serial.println(F("[FS] VIGA: kontrolli Flash Size seadet (vaja FS)"));
-  }
-
-  bool haveCfg = loadConfig();
-
-  if (haveCfg && cfg.ssid.length() > 0 && connectSTA(WIFI_TIMEOUT_MS)) {
-    onWifiConnected();
-  } else {
-    startAP();
-  }
-
-  server.on("/",           HTTP_GET,  handleRoot);
-  server.on("/config",     HTTP_GET,  handleConfig);
-  server.on("/save",       HTTP_POST, handleSave);
-  server.on("/reset",      HTTP_POST, handleReset);
-  server.on("/api/status", HTTP_GET,  handleApiStatus);
-  server.onNotFound(handleNotFound);
-  server.begin();
-  Serial.println(F("[HTTP] Veebiserver käivitatud"));
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  while (WiFi.status() != WL_CONNECTED) delay(250);
 }
 
 void loop() {
-  server.handleClient();
-  MDNS.update();
-  buttonTick();
-  oledTick();
+  WiFiClientSecure client;
+  client.setInsecure();   // lihtsustus, vt jaotist "Turvalisus"
 
-  if (restartAt != 0 && (int32_t)(millis() - restartAt) >= 0) {
-    Serial.println(F("Taaskäivitus..."));
-    delay(100);
-    ESP.restart();
+  HTTPClient http;
+  http.begin(client, String("https://api.openweathermap.org/data/2.5/weather"
+                            "?q=Tallinn,EE&units=metric&appid=") + API_KEY);
+
+  if (http.GET() == HTTP_CODE_OK) {
+    JsonDocument doc;
+    deserializeJson(doc, http.getString());
+
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(0, 0, doc["name"].as<String>());
+    display.setFont(ArialMT_Plain_24);
+    display.drawString(0, 16, String(doc["main"]["temp"].as<float>(), 1) + " °C");
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(0, 48, doc["weather"][0]["description"].as<String>());
+    display.display();
   }
+  http.end();
 
-  if (apMode) {
-    dns.processNextRequest();
-    apRetryTick();
-  } else {
-    staWatchdogTick();
-  }
-
-  ntpTick();
-  weatherTick();   // kõik vead püütakse kinni - seade ei jookse kokku
-  yield();
+  delay(10UL * 60 * 1000);   // uuendus iga 10 minuti järel
 }
 ```
