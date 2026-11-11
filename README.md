@@ -2,11 +2,11 @@
 
 **Autorid:** Tanel Metshein, Uku Siim Kurm
 **Juhendaja:** Tanel Toova
-**Projekti algus:** 2026-10-21 · **Viimati uuendatud:** 2026-11-04 · **Tunnipäevik:** [vt allpool](#tunnipäevik)
+**Projekti algus:** 2026-10-21 · **Viimati uuendatud:** 2026-11-11 · **Tunnipäevik:** [vt allpool](#tunnipäevik)
 
 Püsivara HU-061 ilmakella jootmiskomplektile (ESP-01S + 0,96" OLED). Seade toob OpenWeatherMapist valitud linna ilmaandmed ning kuvab need ekraanil ja veebilehel. WiFi, linna ja API võtme saab seadistada brauseris, ilma püsivara uuesti üles laadimata.
 
-<img src="docs/img/seade.jpg" alt="Kokkupandud ilmajaam" width="400">
+<img src="docs/img/seade.jpg" alt="Kokkujoodetud ilmajaam, ekraanil Tartu ilm" width="400">
 
 ## Sisukord
 
@@ -50,7 +50,7 @@ ESP-01S-il pole USB-pesa, seega laaditakse püsivara ESP-01 USB-programmaatoriga
 
 1. Võta ESP-01S HU-061 plaadilt ära ja pane programmaatorisse nii, et moodul jääb programmaatori kohale.
 2. Lülita lüliti asendisse **PROG** ja ühenda programmaator USB-sse. Lüliti asendit loetakse ainult käivitusel, seega pärast lülitamist ühenda programmaator uuesti.
-3. Ava sketš, vali õige COM-port ja vajuta **Upload**. Üleslaadimine õnnestus, kui väljundis on `Hash of data verified` ja viimasena `Hard resetting via RTS pin...` (sellele rohkem ridu ei järgne).
+3. Ava [`code/weather_station.ino`](code/weather_station.ino). Arduino IDE nõuab, et sketš oleks samanimelises kaustas, ja pakub kausta `weather_station` loomist. Vajuta **OK**. Seejärel vali õige COM-port ja vajuta **Upload**. Üleslaadimine õnnestus, kui väljundis on `Hash of data verified` ja viimasena `Hard resetting via RTS pin...` (sellele rohkem ridu ei järgne).
 4. Pane ESP-01S tagasi HU-061 plaadile samas suunas ja ühenda plaat USB-toitega.
 
 > Üleslaadimine kustutab komplekti tehase püsivara. Varukoopia saad enne teha käsuga
@@ -201,17 +201,6 @@ Kõik ühendused on HU-061 trükkplaadil, väliseid juhtmeid pole vaja (skeem to
                                              GND
 ```
 
-## Turvalisus
-
-| Risk | Mõju | Lahendus |
-|---|---|---|
-| OpenWeatherMapi serveri sertifikaati ei kontrollita (`setInsecure()`) | Ründaja, kes on seadme ja interneti vahel (sama WiFi, võltspääsupunkt, ruuter, DNS), võib esineda OpenWeatherMapina, lugeda API võtit ja saata valeandmeid | Kontrollida sertifikaati juur-CA järgi (`setTrustAnchors()` + `setX509Time()` NTP ajaga) |
-| Veebiliides töötab HTTP-ga, mitte HTTPS-iga | Sama võrgu kasutaja võib salvestamisel näha WiFi parooli ja API võtit | Seadistada ainult usaldusväärses võrgus või AP-režiimis |
-| `ADMIN_PASS` on vaikimisi tühi | Iga kohtvõrgu kasutaja saab seadistusi muuta või kustutada | Määrata `ADMIN_PASS` |
-| AP vaikeparool on koodis ja ekraanil | Läheduses olev isik saab seadistusvõrku ühenduda, kui seade on AP-režiimis | Muuta `AP_PASS` enne kasutuselevõttu |
-
-Risk on selle seadme puhul väike (tasuta API võti, ainult ilmaandmed), kuid sertifikaadi kontroll on kerge lisada ja on parem praktika.
-
 ## Veaotsing
 
 | Sümptom | Põhjus ja lahendus |
@@ -250,12 +239,13 @@ Risk on selle seadme puhul väike (tasuta API võti, ainult ilmaandmed), kuid se
 |---|---|
 | 2026-10-21 | Projekti algus. Teema valik, GitHubi repositooriumi loomine, dokumentatsiooni esialgne struktuur |
 | 2026-10-22 | Dokumentatsiooni kohandamine HU-061 komplektile: komponendid, viigud, ühendusskeem, nõuded |
-| [2026-10-28] | Vahenädal |
+| 2026-10-28 | Vahenädal |
 | 2026-11-04 | Programmaatori tuvastamine (CH340, COM3) ja Arduino IDE seadistamine (esp8266 3.1.2). Esimene püsivara üleslaadimine ESP-01S-ile (olemasolev testkood + hotspot), OLED-ekraani test HU-061 plaadil. Ühe uue ilmajaama komplekti kokkujootmine (Tanel). Dokumentatsiooni ülevaatus ja parandused (Uku). |
+| 2026-11-11 | Teise ilmajaama komplekti kokkujootmine. Püsivara lõpetamine ja testimine: seade ühendub WiFi-ga ning kuvab OLED-il Tartu ilmaandmeid ja kellaaega. Koodile kommentaaride lisamine ja README uuendus. |
 
 ## Koodinäide
 
-Täielik lähtekood lisatakse repositooriumi eraldi failidena. Allolev lihtsustatud näide näitab põhiideed: ühendumine WiFi-ga, ilmaandmete pärimine ja kuvamine OLED-ekraanil. Seadistuste veebiliides, AP-režiim ja veakäsitlus on näitest välja jäetud.
+Täielik kommenteeritud lähtekood on failis [`code/weather_station.ino`](code/weather_station.ino). Allolev lihtsustatud näide näitab põhiideed: ühendumine WiFi-ga, ilmaandmete pärimine ja kuvamine OLED-ekraanil. Seadistuste veebiliides, AP-režiim ja veakäsitlus on näitest välja jäetud.
 
 ```cpp
 #include <ESP8266WiFi.h>
