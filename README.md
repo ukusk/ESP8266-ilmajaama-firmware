@@ -66,6 +66,30 @@ ESP-01S-il pole USB-pesa, seega laaditakse püsivara ESP-01 USB-programmaatoriga
 
 Seadistuste kustutamiseks hoia nuppu **KEY1** 5 sekundit all.
 
+### 4. Ilmaandmete ajalugu Google Sheetsis (valikuline)
+
+Pärast iga eduka ilmapäringu (vaikimisi iga 10 min) lisab seade Google Sheeti tabelisse uue rea: aeg, temperatuur, niiskus, rõhk ja kirjeldus.
+
+1. Loo Google Sheet ja kirjuta rea 1 lahtritesse A1–E1 pealkirjad: `Aeg`, `Temp`, `Niiskus`, `Rõhk`, `Kirjeldus`.
+2. Ava **Extensions → Apps Script**, kustuta vaikekood ja kleebi:
+
+   ```js
+   function doGet(e) {
+     var p = e.parameter;
+     if (p.key !== "MINU_SALAJANE_VÕTI") return ContentService.createTextOutput("no");
+     SpreadsheetApp.getActiveSheet().appendRow([new Date(), p.temp, p.hum, p.press, p.desc]);
+     return ContentService.createTextOutput("ok");
+   }
+   ```
+
+   Asenda `MINU_SALAJANE_VÕTI` enda valitud juhusliku tähtede-numbrite reaga.
+3. **Deploy → New deployment → Web app**, *Execute as:* **Me**, *Who has access:* **Anyone**. Kinnita load ja kopeeri `/exec`-lõpuline aadress.
+4. Kontrolli brauseris: `AADRESS?key=VÕTI&temp=5&hum=80&press=1010&desc=test` peab vastama `ok` ja tabelisse tekib rida.
+5. Pane aadress ja võti faili [`code/weather_station.ino`](code/weather_station.ino) konstantidesse `SHEET_URL` ja `SHEET_KEY`, siis lae püsivara üles. Kuni `SHEET_URL` sisaldab sõna `EXAMPLE`, on logimine välja lülitatud.
+6. Serial monitoris peab pärast iga päringut olema rida `[SHEET] HTTP 200`.
+
+> Ära pane päris aadressi ega võtit Giti. Skripti muutmisel kasuta **Deploy → Manage deployments → Edit → New version**, siis aadress ei muutu.
+
 ## Projekti eesmärk
 
 Ehitada ESP8266-põhine ilmajaam, mis:
@@ -173,6 +197,7 @@ GPIO0 ja GPIO2 peavad käivitusel olema kõrgel tasemel. Seda tagavad OLED-moodu
 | F10 | Kuvatakse viimase eduka uuenduse aeg | `lastOkEpoch` |
 | F11 | Kuvatakse WiFi ja API olek | OLED, avaleht, `/api/status` |
 | F12 | Töö taastub pärast voolukatkestust iseseisvalt | `apRetryTick()` proovib AP-režiimis põhivõrku iga 2 min |
+| F13 | Ilmaandmete ajalugu salvestatakse Google Sheetsi | `logToSheet()`, Apps Script veebirakendus, vt [Kiirstart](#4-ilmaandmete-ajalugu-google-sheetsis-valikuline) |
 
 **Mittefunktsionaalsed**
 

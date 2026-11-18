@@ -75,6 +75,11 @@ static const bool     OLED_FLIP         = false;   // default screen orientation
 
 static const char*    NTP_SERVER     = "pool.ntp.org";  // time server
 
+// Google Sheets history log (Apps Script web app). Replace both with your own values.
+// While SHEET_URL contains "EXAMPLE" logging is switched off. Do not commit the real values.
+static const char*    SHEET_URL      = "https://script.google.com/macros/s/AKfycbEXAMPLE/exec";
+static const char*    SHEET_KEY      = "EXAMPLE_KEY";   // must match the key in the Apps Script
+
 // ---------------------------------------------------------------------------
 // Global data
 // ---------------------------------------------------------------------------
@@ -556,13 +561,40 @@ void fetchWeather() {
   if (!lastApiOk) Serial.println("[API] Viga: " + apiMessage);
 }
 
+// Appends one row (time, temp, humidity, pressure, description) to the Google Sheet.
+// Runs after fetchWeather() has returned, so its TLS connection is already freed.
+void logToSheet() {
+  if (strstr(SHEET_URL, "EXAMPLE") != nullptr) return;         // not configured
+  if (ESP.getFreeHeap() < 14000) return;                       // TLS needs ~14 KB RAM
+
+  String url = String(SHEET_URL) + F("?key=") + urlEncode(SHEET_KEY);
+  url += F("&temp=");  url += String(weather.temp, 1);
+  url += F("&hum=");   url += weather.humidity;
+  url += F("&press="); url += weather.pressure;
+  url += F("&desc=");  url += urlEncode(weather.desc);
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setBufferSizes(1024, 512);
+  HTTPClient http;
+  http.setTimeout(API_TIMEOUT_MS);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);      // Google answers with a 302
+  if (!http.begin(client, url)) return;
+  int code = http.GET();
+  Serial.printf("[SHEET] HTTP %d\n", code);
+  http.end();
+}
+
 // F7: decides when to call the API.
 //   after success: wait the configured interval (2-1440 min)
 //   after failure: retry in 60 s
 void weatherTick() {
   if (!staConnected()) return;
   uint32_t interval = lastApiOk ? (uint32_t)cfg.intervalMin * 60000UL : API_RETRY_MS;
-  if (!apiAttempted || millis() - lastApiAttempt >= interval) fetchWeather();
+  if (!apiAttempted || millis() - lastApiAttempt >= interval) {
+    fetchWeather();
+    if (lastApiOk) logToSheet();                               // save the reading to Google Sheets
+  }
 }
 
 // ---------------------------------------------------------------------------
