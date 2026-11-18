@@ -71,7 +71,7 @@ static const uint8_t  BUTTON_PIN        = 3;       // KEY1 is on RXD (GPIO3), pr
 static const uint8_t  OLED_SDA          = 0;       // OLED data line  (IO0)
 static const uint8_t  OLED_SCL          = 2;       // OLED clock line (IO2)
 static const uint8_t  OLED_ADDR         = 0x3C;    // I2C address of the SSD1306
-static const bool     OLED_FLIP         = true;    // set false if the text is upside down
+static const bool     OLED_FLIP         = false;   // default screen orientation (changeable on the settings page)
 
 static const char*    NTP_SERVER     = "pool.ntp.org";  // time server
 
@@ -88,6 +88,7 @@ struct Config {
   uint16_t intervalMin = 10;     // minutes between weather updates
   int8_t   tzHours     = 2;      // time zone, hours from UTC (Estonia = 2)
   bool     dstAuto     = true;   // add +1 h automatically during EU summer time
+  bool     flip        = OLED_FLIP;  // rotate the OLED 180 degrees
 };
 
 // The latest weather received from the API
@@ -286,6 +287,7 @@ bool loadConfig() {
   cfg.intervalMin = doc["interval"] | 10;
   cfg.tzHours     = doc["tz"]       | 2;
   cfg.dstAuto     = doc["dst"]      | true;
+  cfg.flip        = doc["flip"]     | OLED_FLIP;
   if (cfg.intervalMin < 2) cfg.intervalMin = 2;                // enforce minimum 2 minutes
   Serial.println(F("[CFG] Seadistus loetud"));
   return true;
@@ -306,6 +308,7 @@ bool saveConfig() {
   doc["interval"] = cfg.intervalMin;
   doc["tz"]       = cfg.tzHours;
   doc["dst"]      = cfg.dstAuto;
+  doc["flip"]     = cfg.flip;
 
   File f = LittleFS.open(CONFIG_TMP, "w");                     // 1) write temp file
   if (!f) {
@@ -666,7 +669,7 @@ void handleConfig() {
   s += cfg.pass.length() ? F("(jäta tühjaks, et säilitada praegune)") : F("(avatud võrgu korral tühi)");
   s += F("'>");
 
-  s += F("<label>Linn (nt Tallinn või Tartu,EE)</label><input type='text' name='city' maxlength='60' value='");
+  s += F("<label>Linn (nt Tallinn või Tartu,EE, vaata API docsi)</label><input type='text' name='city' maxlength='60' value='");
   s += htmlEscape(cfg.city);
   s += F("'>");
 
@@ -685,6 +688,10 @@ void handleConfig() {
   s += F("<label><input type='checkbox' name='dst' value='1'");
   if (cfg.dstAuto) s += F(" checked");
   s += F("> Arvesta automaatselt suveaega (EL)</label>");
+
+  s += F("<label><input type='checkbox' name='flip' value='1'");
+  if (cfg.flip) s += F(" checked");
+  s += F("> Pööra ekraan 180° (kui tekst on tagurpidi)</label>");
 
   s += F("<button type='submit'>Salvesta ja taaskäivita</button></form>");
   // Second form: factory reset button with a confirmation popup
@@ -721,7 +728,8 @@ void handleSave() {
   long tz = server.arg("tz").toInt();
   n.intervalMin = (uint16_t)constrain(iv, 2L, 1440L);          // clamp to the allowed range
   n.tzHours     = (int8_t)constrain(tz, -12L, 14L);
-  n.dstAuto     = server.hasArg("dst");                        // an unticked checkbox is not sent at all
+  n.flip        = server.hasArg("flip");
+  n.dstAuto     = server.hasArg("dst");                      // an unticked checkbox is not sent at all
 
   cfg = n;                                                     // everything valid -> accept
   bool ok = saveConfig();
@@ -872,7 +880,6 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);                           // internal pull-up, button pulls to GND
 
   display.init();                                              // start the OLED
-  if (OLED_FLIP) display.flipScreenVertically();               // the HU-061 board mounts it upside down
   display.setFont(ArialMT_Plain_10);
   display.drawString(0, 0, F("Ilmajaam käivitub..."));         // boot splash
   display.display();
@@ -889,6 +896,7 @@ void setup() {
   }
 
   bool haveCfg = loadConfig();                                 // F5: restore saved settings
+  if (cfg.flip) display.flipScreenVertically();                // user-selected orientation
 
   // F1/F2: saved WiFi -> connect; otherwise (or on failure) start the setup AP
   if (haveCfg && cfg.ssid.length() > 0 && connectSTA(WIFI_TIMEOUT_MS)) {
