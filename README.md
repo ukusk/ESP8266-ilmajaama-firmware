@@ -67,6 +67,7 @@ ESP-01S-il pole USB-pesa, seega laaditakse püsivara ESP-01 USB-programmaatoriga
 Seadistuste kustutamiseks hoia nuppu **KEY1** 5 sekundit all.
 
 ### 4. Ilmaandmete ajalugu Google Sheetsis (valikuline)
+<img src="docs/img/googlesheets_reference_image.png" alt="andmed Google Sheets'is" width="400">
 
 Pärast iga eduka ilmapäringu (vaikimisi iga 10 min) lisab seade Google Sheeti tabelisse uue rea: aeg, temperatuur, niiskus, rõhk ja kirjeldus.
 
