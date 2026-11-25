@@ -267,6 +267,8 @@ Kõik ühendused on HU-061 trükkplaadil, väliseid juhtmeid pole vaja (skeem to
 | 2026-10-28 | Vahenädal |
 | 2026-11-04 | Programmaatori tuvastamine (CH340, COM3) ja Arduino IDE seadistamine (esp8266 3.1.2). Esimene püsivara üleslaadimine ESP-01S-ile (olemasolev testkood + hotspot), OLED-ekraani test HU-061 plaadil. Ühe uue ilmajaama komplekti kokkujootmine (Tanel). Dokumentatsiooni ülevaatus ja parandused (Uku). |
 | 2026-11-11 | Teise ilmajaama komplekti kokkujootmine. Püsivara lõpetamine ja testimine: seade ühendub WiFi-ga ning kuvab OLED-il Tartu ilmaandmeid ja kellaaega. Koodile kommentaaride lisamine ja README uuendus. |
+| 2026-11-18 | Mõlema kokkujoodetud ilmajaama funktsionaalsuse ülekontrollimine, komplektide täielik kokkupanek (plastikust korpuse), Google Sheetsiga integreerimine (Tanel). |
+| 2026-11-25 | Readme korrastamine, üldine viimistlus. |
 
 ## Koodinäide
 
